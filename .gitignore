@@ -1,0 +1,7 @@
+sfx_ai/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.wav
+*.mp4
+.DS_Store
