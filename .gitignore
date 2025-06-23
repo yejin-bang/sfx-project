@@ -1,7 +1,28 @@
-sfx_ai/
+# Audio data (too large for git)
+data/ESC-50/audio/
+*.wav
+*.mp3
+*.flac
+
+# Python
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
-*.wav
-*.mp4
+*.pyo
+sfx_ai/
+.env
+practice/
+
+# System files
 .DS_Store
+Thumbs.db
+
+# Large model files
+models/*.pt
+models/*.pth
+*.pkl
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+data/ESC-50/
+data/video/
