@@ -1,5 +1,5 @@
 # Audio data (too large for git)
-data/ESC-50/audio/
+data/
 *.wav
 *.mp3
 *.flac
@@ -24,5 +24,4 @@ models/*.pth
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
-data/ESC-50/
-data/video/
+
