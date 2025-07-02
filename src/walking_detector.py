@@ -65,4 +65,4 @@ if __name__ == "__main__":
     detections = detector.analyze_walking_video(frames, timestamps)
 
     print('\nWalking detection test complete!')
-    print('='*70)
+    print()

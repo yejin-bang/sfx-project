@@ -63,7 +63,7 @@ class VideoProcessor:
         print(f"Extracted {len(frames)} frames at ~{fps_target} FPS")
 
         return frames, frame_timestamps
-    
+
 if __name__ == "__main__":
     processor = VideoProcessor()
 
