@@ -49,7 +49,7 @@ class AudioGenerator:
         """Generate one test file for you to listen to"""
         print("=== Quick AudioLDM Test ===")
         
-        prompt = "footsteps on concrete"
+        prompt = "footsteps"
         print(f"Testing: {prompt}")
         
         # Generate short test
