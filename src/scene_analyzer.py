@@ -320,7 +320,7 @@ class FinalSceneAnalyzer:
 if __name__ == "__main__":
     
     analyzer = FinalSceneAnalyzer(use_local_llm=False)
-    video_path = 'data/test_videos/walk3.mp4'
+    video_path = '../data/test_videos/walk3.mp4'
 
     cap = cv2.VideoCapture(video_path)
     

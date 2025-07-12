@@ -67,7 +67,7 @@ class VideoProcessor:
 if __name__ == "__main__":
     processor = VideoProcessor()
 
-    video_path = 'data/test_videos/walk1.mp4'
+    video_path = '../data/test_videos/walk1.mp4'
 
     try:
         info = processor.validate_video(video_path)

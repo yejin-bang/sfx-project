@@ -55,7 +55,7 @@ if __name__ == "__main__":
     from video_processor import VideoProcessor
 
     processor = VideoProcessor()
-    video_path = 'data/test_videos/walk1.mp4'
+    video_path = '../data/test_videos/walk1.mp4'
 
     print('=== Processing Video ===')
     frames, timestamps = processor.extract_frames(video_path)
