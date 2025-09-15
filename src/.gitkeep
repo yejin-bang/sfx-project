@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""
+VSCode에서 실행하는 워드 파일 일괄 PDF 변환기
+"""
+
+import os
+import sys
+from pathlib import Path
+from docx2pdf import convert
+import time
+
+def print_header():
+    """프로그램 헤더 출력"""
+    print("=" * 60)
+    print("🔄 워드 파일 → PDF 변환기 (VSCode용)")
+    print("=" * 60)
+
+def get_word_files(folder_path):
+    """워드 파일 목록 가져오기"""
+    folder = Path(folder_path)
+    if not folder.exists():
+        print(f"❌ 폴더가 존재하지 않습니다: {folder_path}")
+        return []
+    
+    word_files = []
+    extensions = ['.doc', '.docx']
+    
+    for ext in extensions:
+        word_files.extend(folder.glob(f'*{ext}'))
+        word_files.extend(folder.glob(f'**/*{ext}'))  # 하위 폴더 포함
+    
+    return word_files
+
+def convert_single_file(word_file, output_folder):
+    """단일 파일 변환"""
+    try:
+        output_path = Path(output_folder)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        pdf_file = output_path / f"{word_file.stem}.pdf"
+        
+        print(f"🔄 변환 중: {word_file.name}")
+        convert(str(word_file), str(pdf_file))
+        print(f"✅ 완료: {pdf_file.name}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ 실패: {word_file.name} - {str(e)}")
+        return False
+
+def batch_convert(input_folder, output_folder):
+    """일괄 변환"""
+    print(f"\n📂 입력 폴더: {input_folder}")
+    print(f"📁 출력 폴더: {output_folder}")
+    
+    # 워드 파일 찾기
+    word_files = get_word_files(input_folder)
+    
+    if not word_files:
+        print("\n❌ 워드 파일(.doc, .docx)을 찾을 수 없습니다.")
+        return
+    
+    print(f"\n📊 발견된 워드 파일: {len(word_files)}개")
+    for i, file in enumerate(word_files, 1):
+        print(f"  {i}. {file.name}")
+    
+    # 변환 시작
+    print(f"\n🚀 변환을 시작합니다...")
+    start_time = time.time()
+    
+    success_count = 0
+    fail_count = 0
+    
+    for word_file in word_files:
+        if convert_single_file(word_file, output_folder):
+            success_count += 1
+        else:
+            fail_count += 1
+        time.sleep(0.1)  # 시스템 부하 방지
+    
+    # 결과 출력
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    
+    print("\n" + "=" * 60)
+    print("📊 변환 결과")
+    print("=" * 60)
+    print(f"✅ 성공: {success_count}개")
+    print(f"❌ 실패: {fail_count}개")
+    print(f"⏱️ 소요 시간: {elapsed_time:.2f}초")
+    print("=" * 60)
+
+def interactive_mode():
+    """대화형 모드"""
+    print_header()
+    
+    while True:
+        print("\n📝 사용 방법:")
+        print("1. 워드 파일이 있는 폴더 경로를 입력하세요")
+        print("2. PDF를 저장할 폴더 경로를 입력하세요")
+        print("3. 'quit' 입력시 종료")
+        
+        # 입력 폴더
+        input_folder = input("\n📂 입력 폴더 경로: ").strip()
+        if input_folder.lower() == 'quit':
+            print("👋 프로그램을 종료합니다.")
+            break
+            
+        if not input_folder:
+            print("❌ 폴더 경로를 입력해주세요.")
+            continue
+        
+        # 출력 폴더
+        output_folder = input("📁 출력 폴더 경로: ").strip()
+        if output_folder.lower() == 'quit':
+            print("👋 프로그램을 종료합니다.")
+            break
+            
+        if not output_folder:
+            print("❌ 출력 폴더 경로를 입력해주세요.")
+            continue
+        
+        # 변환 실행
+        batch_convert(input_folder, output_folder)
+        
+        # 계속 여부 확인
+        continue_choice = input("\n🔄 다른 폴더도 변환하시겠습니까? (y/n): ").strip().lower()
+        if continue_choice not in ['y', 'yes']:
+            print("👋 프로그램을 종료합니다.")
+            break
+
+def command_line_mode():
+    """명령행 인수 모드"""
+    if len(sys.argv) != 3:
+        print("사용법: python word_to_pdf_converter.py <입력폴더> <출력폴더>")
+        print("예시: python word_to_pdf_converter.py ./docs ./pdfs")
+        return
+    
+    input_folder = sys.argv[1]
+    output_folder = sys.argv[2]
+    
+    print_header()
+    batch_convert(input_folder, output_folder)
+
+# VSCode에서 직접 실행하기 위한 설정
+if __name__ == "__main__":
+    try:
+        # 명령행 인수가 있으면 명령행 모드, 없으면 대화형 모드
+        if len(sys.argv) > 1:
+            command_line_mode()
+        else:
+            interactive_mode()
+    except KeyboardInterrupt:
+        print("\n\n⚠️ 사용자에 의해 중단되었습니다.")
+    except Exception as e:
+        print(f"\n❌ 오류 발생: {str(e)}")
+        print("문제가 지속되면 관리자에게 문의하세요.")

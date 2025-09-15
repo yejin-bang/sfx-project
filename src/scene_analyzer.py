@@ -1,348 +1,467 @@
-# File: src/scene_analyzer_final.py
 import clip
 import torch
 import cv2
 from PIL import Image
-import ollama
-import os
+import numpy as np
 import random
+from typing import List, Dict, Tuple, Optional
+import time
 
-class FinalSceneAnalyzer:
-    def __init__(self, use_local_llm=False):  # Default to False now
-        print("🚀 Loading Final Scene Analyzer...")
+class MultiSegmentSceneAnalyzer:
+    def __init__(self, seed=42):
+        print("Loading Multi-Segment Scene Analyzer...")
         
+        # Set seed for reproducibility
+        self.set_seed(seed)
+        
+        # Initialize CLIP
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model, self.preprocess = clip.load("ViT-B/32", device=self.device)
-        print(f"✅ CLIP loaded on {self.device}")
+        print(f"CLIP loaded on {self.device}")
         
-
-        self.use_local_llm = use_local_llm
-        if use_local_llm:
-            self.test_local_llm()
+        # 15 environment categories optimized for CLIP
+        self.environment_options = [
+            # Indoor (7개)
+            "indoor office workspace",
+            "indoor home residential", 
+            "indoor kitchen",
+            "indoor shopping retail",
+            "indoor restaurant cafe",
+            "indoor gym sports facility", 
+            "indoor hallway corridor",
+            
+            # Outdoor urban (4개)
+            "outdoor city street",
+            "outdoor sidewalk pavement", 
+            "outdoor parking lot",
+            "outdoor urban plaza",
+            
+            # Outdoor natural (4개)
+            "outdoor beach sand",
+            "outdoor forest trail",
+            "outdoor park grass", 
+            "outdoor dirt gravel path"
+        ]
         
-        # Environment-specific sound mapping algorithm
+        # Environment to surface mapping
+        self.environment_surface_map = {
+            "indoor office workspace": "carpet",
+            "indoor home residential": "wood", 
+            "indoor kitchen": "tile",
+            "indoor shopping retail": "tile",
+            "indoor restaurant cafe": "wood",
+            "indoor gym sports facility": "rubber",
+            "indoor hallway corridor": "marble",
+            
+            "outdoor city street": "concrete",
+            "outdoor sidewalk pavement": "concrete",
+            "outdoor parking lot": "asphalt",
+            "outdoor urban plaza": "stone",
+            
+            "outdoor beach sand": "sand",
+            "outdoor forest trail": "dirt",
+            "outdoor park grass": "grass",
+            "outdoor dirt gravel path": "gravel"
+        }
+        
+        # Environment to footwear mapping
+        self.environment_footwear_map = {
+            "indoor office workspace": ["dress_shoes", "sneakers"],
+            "indoor home residential": ["sneakers", "barefoot", "slippers"], 
+            "indoor kitchen": ["sneakers", "barefoot"],
+            "indoor shopping retail": ["sneakers", "dress_shoes"],
+            "indoor restaurant cafe": ["dress_shoes", "sneakers"],
+            "indoor gym sports facility": ["running_shoes", "sneakers"],
+            "indoor hallway corridor": ["sneakers", "dress_shoes"],
+            
+            "outdoor city street": ["sneakers", "boots", "dress_shoes"],
+            "outdoor sidewalk pavement": ["sneakers", "running_shoes"],
+            "outdoor parking lot": ["sneakers", "boots"],
+            "outdoor urban plaza": ["sneakers", "dress_shoes"],
+            
+            "outdoor beach sand": ["barefoot", "sandals"],
+            "outdoor forest trail": ["boots", "hiking_boots"],
+            "outdoor park grass": ["sneakers", "running_shoes"],
+            "outdoor dirt gravel path": ["boots", "sneakers"]
+        }
+        
+        # Environment + footwear to sound mapping
         self.environment_sound_map = {
-            "indoor office space": {
-                "dress_shoes": ["tapping", "clicking", "clacking"],
+            "indoor office workspace": {
+                "dress_shoes": ["crisp tapping", "sharp clicking"],
                 "sneakers": ["soft padding", "muffled steps"]
             },
-            "indoor home interior": {
-                "sneakers": ["padding", "shuffling", "soft steps"], 
-                "barefoot": ["patting", "soft padding", "quiet steps"]
+            "indoor home residential": {
+                "sneakers": ["gentle padding", "soft steps"], 
+                "barefoot": ["soft patting", "quiet footfalls"],
+                "slippers": ["soft shuffling", "gentle sliding"]
             },
             "outdoor city street": {
-                "sneakers": ["urban shuffling", "pavement padding", "street walking"],
-                "boots": ["solid thudding", "concrete stomping", "heavy steps"]
+                "sneakers": ["urban padding", "street walking"],
+                "boots": ["solid thudding", "heavy footfalls"],
+                "dress_shoes": ["pavement clicking", "urban tapping"]
             },
-            "outdoor hiking trail": {
-                "boots": ["trail crunching", "dirt thudding", "earthy stomping"]
+            "outdoor beach sand": {
+                "barefoot": ["sand crunching", "soft sandy steps"],
+                "sandals": ["sandy slapping", "beach walking"]
             },
-            "outdoor beach area": {
-                "barefoot": ["soft patting", "gentle steps", "beach walking"],
-                "sneakers": ["muffled stomping", "soft crunching", "cushioned steps"]
+            "outdoor forest trail": {
+                "boots": ["trail crunching", "forest stomping"],
+                "hiking_boots": ["rugged stomping", "earthy thudding"]
             }
         }
         
-
+        # Scene change detection parameters
+        self.scene_change_threshold = 0.15  # Structural similarity threshold
+        
+    def set_seed(self, seed):
+        """Set seed for reproducible results"""
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
     
-    def test_local_llm(self):
-        """Test if Ollama is working"""
-        try:
-            response = ollama.generate(
-                model='llama3.1:8b',
-                prompt='Test',
-                options={"num_predict": 5}
-            )
-            print("✅ Local LLM (Ollama) working")
-            return True
-        except Exception as e:
-            print(f"⚠️ Local LLM failed: {e}")
-            self.use_local_llm = False
-            return False
-    
-    def analyze_environment_with_clip(self, frame):
-
-        try:
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
-            image = self.preprocess(pil_image).unsqueeze(0).to(self.device)
+    def analyze_video_segments(self, frames, timestamps):
+        """
+        Main function: Analyze video frames and return multiple segments with prompts
+        
+        Args:
+            frames (List): List of video frames (OpenCV format)
+            timestamps (List): Corresponding timestamps for each frame
             
-
-            environment_options = [
-                "indoor office space",
-                "indoor home interior",
-                "outdoor city street", 
-                "outdoor hiking trail",
-                "outdoor beach area"
-            ]
+        Returns:
+            List[Dict]: List of segment analysis results
+        """
+        print("Starting multi-segment scene analysis...")
+        print(f"Input: {len(frames)} frames, {timestamps[0]:.1f}s - {timestamps[-1]:.1f}s")
+        
+        start_time = time.time()
+        
+        # Step 1: Detect scene segments based on transitions
+        segments = self.detect_scene_segments(frames, timestamps)
+        
+        print(f"Detected {len(segments)} scene segments")
+        
+        # Step 2: Analyze each segment
+        segment_results = []
+        for i, segment in enumerate(segments):
+            segment_result = self.analyze_single_segment(segment, segment_id=i)
+            if segment_result:
+                segment_results.append(segment_result)
+        
+        processing_time = time.time() - start_time
+        print(f"Multi-segment analysis completed in {processing_time:.2f}s")
+        print(f"Generated {len(segment_results)} audio prompts")
+        
+        return segment_results
+    
+    def detect_scene_segments(self, frames, timestamps):
+        """
+        Detect scene transition points and split into segments
+        
+        Args:
+            frames (List): Video frames
+            timestamps (List): Frame timestamps
             
-            environment, confidence = self._clip_classify(image, environment_options) # one image, 5 options
-            
-            print(f"🌍 Environment: {environment} (confidence: {confidence:.3f})")
-            return environment, confidence
-            
-        except Exception as e:
-            print(f"❌ Environment analysis failed: {e}")
-            return "outdoor city street", 0.5
-    
-    def get_contextual_footwear(self, environment, use_random=True):
-        """Smart contextual footwear detection based on environment"""
-
+        Returns:
+            List[Dict]: List of segments with frames and time info
+        """
+        if len(frames) <= 1:
+            return [{'frames': frames, 'timestamps': timestamps, 'start_time': timestamps[0], 'end_time': timestamps[-1]}]
         
-        environment_footwear_map = {
-            "indoor office space": ["dress_shoes", "sneakers"],
-            "indoor home interior": ["sneakers", "barefoot"], 
-            "outdoor city street": ["sneakers", "boots"],
-            "outdoor hiking trail": ["boots"],  
-            "outdoor beach area": ["barefoot"]
-        }
+        segments = []
+        current_segment_start = 0
         
-        possible_shoes = environment_footwear_map.get(environment, ["sneakers"])
+        print("Detecting scene transitions...")
         
-        if use_random and len(possible_shoes) > 1:
-
-            selected_footwear = random.choice(possible_shoes)
-            print(f"👟 Randomly selected: {selected_footwear}")
-            print(f"   (From options: {possible_shoes})")
-        else:
-
-            selected_footwear = possible_shoes[0]
-            print(f"👟 Default footwear: {selected_footwear}")
-            print(f"   (Other options: {possible_shoes[1:] if len(possible_shoes) > 1 else 'none'})")
-        
-        return selected_footwear
-    
-    def get_contextual_sound(self, environment, footwear):
-        """Get environment-appropriate sound verb using smart algorithm"""
-        
-        # Get sound options for this environment + footwear combination
-        env_sounds = self.environment_sound_map.get(environment, {})
-        sound_options = env_sounds.get(footwear, [])
-        
-        if sound_options:
-            # Randomly pick from contextual options for variety
-            selected_sound = random.choice(sound_options)
-            print(f"Contextual sound: '{selected_sound}' from {sound_options}")
-            return selected_sound
-        else:
-            # Fallback to generic sound if no mapping exists
-            fallback_sounds = {
-                'dress_shoes': 'tapping',
-                'boots': 'thudding',
-                'sneakers': 'padding',
-                'barefoot': 'patting'
-            }
-            fallback = fallback_sounds.get(footwear, 'stepping')
-            print(f"🔄 Fallback sound: '{fallback}' (no contextual mapping)")
-            return fallback
-    
-    def get_contextual_surface(self, environment):
-        """Map environment to most likely surface from my dataset"""
-        
-        environment_surface_map = {
-            "indoor office space": "marble",
-            "indoor home interior": "wood",
-            "outdoor city street": "concrete",
-            "outdoor hiking trail": "dirt", 
-            "outdoor beach area": "sand"
-        }
-        
-        surface = environment_surface_map.get(environment, "concrete")
-        
-        print(f"🏗️ Contextual surface: {surface}")
-        return surface
-    
-    def _clip_classify(self, image, options):
-
-        text_tokens = clip.tokenize(options).to(self.device)
-        
-        with torch.no_grad():
-            logits_per_image, _ = self.model(image, text_tokens)
-            probs = logits_per_image.softmax(dim=-1).cpu().numpy()
-        
-        best_idx = probs.argmax()
-        confidence = float(probs[0][best_idx])
-        
-        return options[best_idx], confidence
-    
-    def generate_smart_audio_prompt(self, environment, surface, footwear):
-        """Generate audio prompt using smart environment-sound algorithm"""
-        
-        # Get contextual sound verb
-        sound_verb = self.get_contextual_sound(environment, footwear)
-        
-        # Get surface modifier from my dataset
-        surface_modifiers = {
-            'concrete': 'solid',
-            'deck': 'hollow wooden',  
-            'dirt': 'muffled',
-            'gravel': 'crunching',
-            'leaves': 'rustling',
-            'marble': 'sharp',
-            'metal': 'ringing',
-            'mud': 'squelching',
-            'sand': '',  # No modifier for sand (sounds already descriptive)
-            'snow': 'crunching',
-            'wet': 'splashing',
-            'wood': 'hollow'
-        }
-        
-        modifier = surface_modifiers.get(surface, '')
-        
-        # Build prompt with better grammar: [footwear] with [modifier] [sound_verb] on [surface]
-        if modifier:
-            prompt = f"{footwear.replace('_', ' ')} with {modifier} {sound_verb} on {surface}"
-        else:
-            prompt = f"{footwear.replace('_', ' ')} {sound_verb} on {surface}"
-        
-        print(f"🎯 Smart algorithm prompt: '{prompt}'")
-        return prompt
- 
-        """Generate dry footstep audio prompt using local LLM"""
-        if not self.use_local_llm:
-            return self._rule_based_prompt(surface, footwear)
-        
-        try:
-            prompt = f"Give me a concise and direct {footwear} on {surface} description with audio-focused point of view. Make it simple."
-
-            response = ollama.generate(
-                model='llama3.1:8b',
-                prompt=prompt,
-                options={
-                    "num_predict": 12,
-                    "temperature": 0.1,
-                    "top_p": 0.9,
-                    "stop": ["\n"]
+        # Check each consecutive frame pair for scene changes
+        for i in range(1, len(frames)):
+            if self.is_scene_transition(frames[i-1], frames[i]):
+                # Transition detected - end current segment
+                segment = {
+                    'frames': frames[current_segment_start:i],
+                    'timestamps': timestamps[current_segment_start:i],
+                    'start_time': timestamps[current_segment_start],
+                    'end_time': timestamps[i-1]
                 }
-            )
-            
-            enhanced_prompt = response['response'].strip()
-            
-            # Clean up response
-            if enhanced_prompt.startswith('"') and enhanced_prompt.endswith('"'):
-                enhanced_prompt = enhanced_prompt[1:-1]
-            
-            # Remove any environmental words that snuck in
-            env_words = ["with", "in", "reverb", "echo", "ambiance", "acoustic"]
-            for word in env_words:
-                if word in enhanced_prompt.lower():
-                    enhanced_prompt = enhanced_prompt.split(word)[0].strip()
-                    break
-            
-            # Fallback to rule-based if LLM gives bad output
-            if len(enhanced_prompt.split()) < 3:
-                print(f"⚠️ LLM gave short output: '{enhanced_prompt}', using rules")
-                return self._rule_based_prompt(surface, footwear)
-            
-            print(f"🤖 LLM enhanced: '{enhanced_prompt}'")
-            return enhanced_prompt
-            
-        except Exception as e:
-            print(f"❌ LLM enhancement failed: {e}")
-            return self._rule_based_prompt(surface, footwear)
-    
-    def _rule_based_prompt(self, surface, footwear):
-        """Reliable rule-based prompts as fallback"""
+                segments.append(segment)
+                print(f"  Transition at {timestamps[i]:.1f}s")
+                current_segment_start = i
         
-        # Sound characteristics for each footwear type
-        sound_map = {
-            'dress_shoes': 'tapping',
-            'high_heels': 'clicking',
-            'boots': 'thudding',
-            'sneakers': 'padding',
-            'running_shoes': 'bouncing',
-            'sandals': 'slapping',
-            'barefoot': 'patting'
+        # Add final segment
+        final_segment = {
+            'frames': frames[current_segment_start:],
+            'timestamps': timestamps[current_segment_start:],
+            'start_time': timestamps[current_segment_start],
+            'end_time': timestamps[-1]
         }
+        segments.append(final_segment)
         
-        # Surface-specific modifiers based on your dataset
-        surface_modifiers = {
-            'concrete': 'solid',
-            'deck': 'hollow wooden',  
-            'dirt': 'muffled',
-            'gravel': 'crunching',
-            'leaves': 'rustling',
-            'marble': 'sharp',
-            'metal': 'ringing',
-            'mud': 'squelching',
-            'sand': 'soft',
-            'snow': 'crunching',
-            'wet': 'splashing',
-            'wood': 'hollow'
-        }
-        
-        sound = sound_map.get(footwear, 'stepping')
-        modifier = surface_modifiers.get(surface, '')
-        
-        if modifier:
-            prompt = f"{modifier} {footwear.replace('_', ' ')} {sound} on {surface}"
-        else:
-            prompt = f"{footwear.replace('_', ' ')} {sound} on {surface}"
-        
-        print(f"🛠️ Rule-based: '{prompt}'")
-        return prompt
+        return segments
     
-    def analyze_scene(self, frame):
-        """Main interface - complete scene analysis with clean logic"""
-        print("=" * 50)
-        print("🔍 Starting scene analysis...")
-
+    def is_scene_transition(self, frame1, frame2):
+        """
+        Check if there's a significant scene transition between two frames
         
-        # Step 1: Environment detection (CLIP's strength)
-        environment, env_conf = self.analyze_environment_with_clip(frame)
+        Args:
+            frame1, frame2: OpenCV frames
+            
+        Returns:
+            bool: True if scene transition detected
+        """
+        # Convert to grayscale for comparison
+        gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+        gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
         
-        # Step 2: Contextual footwear logic (your domain knowledge)
-        footwear = self.get_contextual_footwear(environment, use_random=True)
+        # Calculate structural similarity
+        # Simple approach: normalized cross-correlation
+        gray1_norm = gray1.astype(np.float32) / 255.0
+        gray2_norm = gray2.astype(np.float32) / 255.0
         
-        # Step 3: Contextual surface mapping (your dataset categories)
+        # Resize for faster computation if frames are large
+        if gray1.shape[0] > 240:
+            gray1_norm = cv2.resize(gray1_norm, (320, 240))
+            gray2_norm = cv2.resize(gray2_norm, (320, 240))
+        
+        # Calculate mean squared difference
+        mse = np.mean((gray1_norm - gray2_norm) ** 2)
+        
+        # Scene change if MSE exceeds threshold
+        is_change = mse > self.scene_change_threshold
+        
+        return is_change
+    
+    def analyze_single_segment(self, segment, segment_id=0):
+        """
+        Analyze a single video segment to determine environment and generate audio prompt
+        
+        Args:
+            segment (Dict): Segment with frames, timestamps, and time range
+            segment_id (int): Segment identifier
+            
+        Returns:
+            Dict: Analysis results for this segment
+        """
+        frames = segment['frames']
+        start_time = segment['start_time']
+        end_time = segment['end_time']
+        duration = end_time - start_time
+        
+        print(f"Analyzing segment {segment_id}: {start_time:.1f}s - {end_time:.1f}s ({duration:.1f}s)")
+        
+        if not frames:
+            print(f"  Warning: Empty segment {segment_id}")
+            return None
+        
+        # Use multiple frames for more stable classification
+        sample_frames = self.sample_frames_from_segment(frames)
+        
+        # Batch CLIP analysis
+        environment, confidence = self.classify_environment_batch(sample_frames)
+        
+        # Get contextual mappings
         surface = self.get_contextual_surface(environment)
+        footwear = self.get_contextual_footwear(environment)
         
-        print(f"\n📊 Final Analysis:")
-        print(f"   Environment: {environment} ({env_conf:.3f} confidence)")
-        print(f"   Surface: {surface}")
-        print(f"   Footwear: {footwear}")
+        # Generate audio prompt
+        audio_prompt = self.generate_audio_prompt(environment, surface, footwear)
         
-        # Step 4: Generate audio prompt using smart algorithm
-        audio_prompt = self.generate_smart_audio_prompt(environment, surface, footwear)
-        
-        print(f"\nFinal audio prompt: '{audio_prompt}'")
-        print("=" * 50)
-        
-        return {
+        result = {
+            'segment_id': segment_id,
+            'time_range': (start_time, end_time),
+            'duration': duration,
             'environment': environment,
             'surface': surface,
             'footwear': footwear,
             'audio_prompt': audio_prompt,
-            'confidence': env_conf
+            'confidence': confidence,
+            'frame_count': len(frames)
+        }
+        
+        print(f"  Environment: {environment} ({confidence:.3f})")
+        print(f"  Prompt: '{audio_prompt}'")
+        
+        return result
+    
+    def sample_frames_from_segment(self, frames, max_frames=5):
+        """
+        Sample representative frames from a segment for stable classification
+        
+        Args:
+            frames (List): All frames in segment
+            max_frames (int): Maximum frames to sample
+            
+        Returns:
+            List: Sampled frames
+        """
+        if len(frames) <= max_frames:
+            return frames
+        
+        # Evenly sample frames across the segment
+        indices = np.linspace(0, len(frames)-1, max_frames, dtype=int)
+        return [frames[i] for i in indices]
+    
+    def classify_environment_batch(self, frames):
+        """
+        Classify environment using batch of frames for stability
+        
+        Args:
+            frames (List): Sample frames from segment
+            
+        Returns:
+            Tuple: (environment, average_confidence)
+        """
+        if not frames:
+            return "outdoor city street", 0.5
+        
+        # Preprocess all frames
+        processed_images = []
+        for frame in frames:
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_image = Image.fromarray(frame_rgb)
+            processed_image = self.preprocess(pil_image)
+            processed_images.append(processed_image)
+        
+        # Batch process
+        image_batch = torch.stack(processed_images).to(self.device)
+        text_tokens = clip.tokenize(self.environment_options).to(self.device)
+        
+        with torch.no_grad():
+            logits_per_image, _ = self.model(image_batch, text_tokens)
+            probs = logits_per_image.softmax(dim=-1).cpu().numpy()
+        
+        # Majority vote: count most frequent prediction
+        predictions = np.argmax(probs, axis=1)
+        prediction_counts = np.bincount(predictions, minlength=len(self.environment_options))
+        final_prediction = np.argmax(prediction_counts)
+        
+        # Average confidence for the winning prediction
+        confidences_for_winner = probs[:, final_prediction]
+        average_confidence = np.mean(confidences_for_winner)
+        
+        environment = self.environment_options[final_prediction]
+        
+        return environment, average_confidence
+    
+    def get_contextual_surface(self, environment):
+        """Get surface type based on environment"""
+        return self.environment_surface_map.get(environment, "concrete")
+    
+    def get_contextual_footwear(self, environment):
+        """Get appropriate footwear based on environment"""
+        possible_shoes = self.environment_footwear_map.get(environment, ["sneakers"])
+        return random.choice(possible_shoes)
+    
+    def get_contextual_sound(self, environment, footwear):
+        """Get sound description based on environment and footwear"""
+        env_sounds = self.environment_sound_map.get(environment, {})
+        sound_options = env_sounds.get(footwear, [])
+        
+        if sound_options:
+            return random.choice(sound_options)
+        else:
+            # Fallback sounds
+            fallback_sounds = {
+                'dress_shoes': 'crisp tapping',
+                'boots': 'heavy thudding',
+                'hiking_boots': 'rugged stomping',
+                'sneakers': 'soft padding',
+                'running_shoes': 'rhythmic bouncing',
+                'sandals': 'light slapping',
+                'slippers': 'gentle shuffling',
+                'barefoot': 'soft patting'
+            }
+            return fallback_sounds.get(footwear, 'steady stepping')
+    
+    def generate_audio_prompt(self, environment, surface, footwear):
+        """
+        Generate final audio prompt for stable audio generation
+        
+        Args:
+            environment (str): Detected environment
+            surface (str): Surface type
+            footwear (str): Footwear type
+            
+        Returns:
+            str: Audio generation prompt
+        """
+        sound_verb = self.get_contextual_sound(environment, footwear)
+        
+        # Surface modifiers for better audio quality
+        surface_modifiers = {
+            'concrete': 'solid',
+            'asphalt': 'firm',
+            'wood': 'hollow',
+            'tile': 'sharp',
+            'marble': 'crisp echoing',
+            'carpet': 'muffled soft',
+            'rubber': 'bouncing',
+            'dirt': 'crunchy',
+            'gravel': 'crunching',
+            'grass': 'soft',
+            'sand': 'shifting',
+            'stone': 'solid'
+        }
+        
+        modifier = surface_modifiers.get(surface, 'solid')
+        footwear_clean = footwear.replace('_', ' ')
+        
+        if modifier:
+            prompt = f"{footwear_clean} with {modifier} {sound_verb} on {surface}"
+        else:
+            prompt = f"{footwear_clean} {sound_verb} on {surface}"
+        
+        return prompt
+    
+    def get_analyzer_info(self):
+        """Get information about the analyzer configuration"""
+        return {
+            'device': self.device,
+            'num_environments': len(self.environment_options),
+            'environments': self.environment_options,
+            'scene_change_threshold': self.scene_change_threshold
         }
 
-# TEST WITH FRAME 60
-if __name__ == "__main__":
-    
-    analyzer = FinalSceneAnalyzer(use_local_llm=False)
-    video_path = '../data/test_videos/walk3.mp4'
 
+# Test the analyzer
+if __name__ == "__main__":
+    import os
+    
+    analyzer = MultiSegmentSceneAnalyzer(seed=42)
+    video_path = './data/test_videos/walk4.mp4'
+    
     cap = cv2.VideoCapture(video_path)
     
     if not cap.isOpened():
-        print("❌ Could not open video file")
+        print("Could not open video file")
         print("Current directory:", os.getcwd())
-    
     else:
-
-        cap.set(cv2.CAP_PROP_POS_FRAMES, 60)
-        ret, frame = cap.read()
+        # Extract test frames (simulate 2-second video)
+        frames = []
+        timestamps = []
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        
+        for frame_num in range(int(2 * fps)):  # 2 seconds worth
+            ret, frame = cap.read()
+            if ret:
+                frames.append(frame)
+                timestamps.append(frame_num / fps)
+            else:
+                break
+        
         cap.release()
         
-        if ret:
-            print("✅ Successfully loaded frame 60")
-            print(f"Frame dimensions: {frame.shape}")
+        if frames:
+            print(f"Testing with {len(frames)} frames")
             
-            # Run complete analysis
-            result = analyzer.analyze_scene(frame)
+            # Test multi-segment analysis
+            results = analyzer.analyze_video_segments(frames, timestamps)
             
-            print(f"This prompt is ready for AudioLDM!")
+            print(f"\nFinal Results:")
+            for result in results:
+                print(f"Segment {result['segment_id']}: {result['time_range'][0]:.1f}s-{result['time_range'][1]:.1f}s")
+                print(f"  Prompt: '{result['audio_prompt']}'")
             
         else:
-            print("❌ Could not read frame 60")
-            print("Try checking if the video file exists and is readable")
+            print("Could not read frames from video")
