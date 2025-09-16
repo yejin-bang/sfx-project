@@ -6,7 +6,7 @@ import cv2
 
 
 from video_processor import VideoProcessor
-from src.footstep_detector_heel import WalkingDetector
+from src.prep_for_pipeline.footstep_detector_heel import WalkingDetector
 from scene_analyzer import FinalSceneAnalyzer
 from audio_generator import AudioGenerator
 
