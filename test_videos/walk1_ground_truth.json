@@ -1,0 +1,52 @@
+{
+  "video_path": "./data/test_videos/walk1.mp4",
+  "video_info": {
+    "fps": 23.976024627685547,
+    "total_frames": 164,
+    "duration": 6.84016648075287
+  },
+  "annotations": [
+    {
+      "frame": 29,
+      "timestamp": 1.21,
+      "foot": "right",
+      "datetime": "2025-09-12T13:46:08.180119"
+    },
+    {
+      "frame": 45,
+      "timestamp": 1.877,
+      "foot": "left",
+      "datetime": "2025-09-12T13:46:11.913007"
+    },
+    {
+      "frame": 59,
+      "timestamp": 2.461,
+      "foot": "right",
+      "datetime": "2025-09-12T13:46:32.076836"
+    },
+    {
+      "frame": 73,
+      "timestamp": 3.045,
+      "foot": "left",
+      "datetime": "2025-09-12T13:46:36.035723"
+    },
+    {
+      "frame": 88,
+      "timestamp": 3.67,
+      "foot": "right",
+      "datetime": "2025-09-12T13:46:39.524368"
+    },
+    {
+      "frame": 103,
+      "timestamp": 4.296,
+      "foot": "left",
+      "datetime": "2025-09-12T13:46:44.102424"
+    }
+  ],
+  "summary": {
+    "total_steps": 6,
+    "left_steps": 3,
+    "right_steps": 3,
+    "created": "2025-09-12T13:48:06.327695"
+  }
+}

@@ -3,19 +3,13 @@ import mediapipe as mp
 import numpy as np
 from typing import Dict, List, Tuple, Optional
 import os
-import warnings
-import logging
 import sys
 from pathlib import Path
 
+# Add src directory to path to import VideoValidator
+sys.path.append(str(Path(__file__).parent.parent / 'src'))
+from video_validator import VideoValidator
 
-project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
-from src.video_validator import VideoValidator
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # ERROR만 표시
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
-warnings.filterwarnings('ignore')
 
 class PoseExtractor:
     """
@@ -230,7 +224,7 @@ if __name__ == "__main__":
     extractor = PoseExtractor(target_fps=10, confidence_threshold=0.7)
     
     # Process a video (replace with your video path)
-    video_path = "./data/test_videos/walk4.mp4"  # Adjusted for utils folder location
+    video_path = "../data/test_videos/walk4.mp4"  # Adjusted for utils folder location
     
     try:
         # Extract pose data

@@ -1,0 +1,166 @@
+{
+  "video_path": "./data/test_videos/walk2.mp4",
+  "video_info": {
+    "fps": 29.970029830932617,
+    "total_frames": 409,
+    "duration": 13.646966730005174
+  },
+  "annotations": [
+    {
+      "frame": 8,
+      "timestamp": 0.267,
+      "foot": "left",
+      "datetime": "2025-09-12T13:49:11.832389"
+    },
+    {
+      "frame": 25,
+      "timestamp": 0.834,
+      "foot": "right",
+      "datetime": "2025-09-12T13:49:19.865952"
+    },
+    {
+      "frame": 40,
+      "timestamp": 1.335,
+      "foot": "left",
+      "datetime": "2025-09-12T13:49:28.735868"
+    },
+    {
+      "frame": 57,
+      "timestamp": 1.902,
+      "foot": "right",
+      "datetime": "2025-09-12T13:49:35.744135"
+    },
+    {
+      "frame": 72,
+      "timestamp": 2.402,
+      "foot": "left",
+      "datetime": "2025-09-12T13:49:46.588163"
+    },
+    {
+      "frame": 88,
+      "timestamp": 2.936,
+      "foot": "right",
+      "datetime": "2025-09-12T13:49:54.037940"
+    },
+    {
+      "frame": 104,
+      "timestamp": 3.47,
+      "foot": "left",
+      "datetime": "2025-09-12T13:51:53.966217"
+    },
+    {
+      "frame": 119,
+      "timestamp": 3.971,
+      "foot": "right",
+      "datetime": "2025-09-12T13:52:02.660763"
+    },
+    {
+      "frame": 136,
+      "timestamp": 4.538,
+      "foot": "left",
+      "datetime": "2025-09-12T13:52:17.467749"
+    },
+    {
+      "frame": 151,
+      "timestamp": 5.038,
+      "foot": "right",
+      "datetime": "2025-09-12T13:52:24.151593"
+    },
+    {
+      "frame": 168,
+      "timestamp": 5.606,
+      "foot": "left",
+      "datetime": "2025-09-12T13:52:29.222788"
+    },
+    {
+      "frame": 185,
+      "timestamp": 6.173,
+      "foot": "right",
+      "datetime": "2025-09-12T13:52:34.412706"
+    },
+    {
+      "frame": 200,
+      "timestamp": 6.673,
+      "foot": "left",
+      "datetime": "2025-09-12T13:52:41.992337"
+    },
+    {
+      "frame": 214,
+      "timestamp": 7.14,
+      "foot": "right",
+      "datetime": "2025-09-12T13:52:46.822628"
+    },
+    {
+      "frame": 231,
+      "timestamp": 7.708,
+      "foot": "left",
+      "datetime": "2025-09-12T13:52:53.035199"
+    },
+    {
+      "frame": 247,
+      "timestamp": 8.242,
+      "foot": "right",
+      "datetime": "2025-09-12T13:53:00.516058"
+    },
+    {
+      "frame": 262,
+      "timestamp": 8.742,
+      "foot": "left",
+      "datetime": "2025-09-12T13:53:02.997592"
+    },
+    {
+      "frame": 279,
+      "timestamp": 9.309,
+      "foot": "right",
+      "datetime": "2025-09-12T13:53:06.091136"
+    },
+    {
+      "frame": 294,
+      "timestamp": 9.81,
+      "foot": "left",
+      "datetime": "2025-09-12T13:53:08.722254"
+    },
+    {
+      "frame": 307,
+      "timestamp": 10.244,
+      "foot": "right",
+      "datetime": "2025-09-12T13:53:11.630100"
+    },
+    {
+      "frame": 325,
+      "timestamp": 10.844,
+      "foot": "left",
+      "datetime": "2025-09-12T13:53:14.934655"
+    },
+    {
+      "frame": 340,
+      "timestamp": 11.345,
+      "foot": "right",
+      "datetime": "2025-09-12T13:53:18.267846"
+    },
+    {
+      "frame": 358,
+      "timestamp": 11.945,
+      "foot": "left",
+      "datetime": "2025-09-12T13:53:23.429169"
+    },
+    {
+      "frame": 372,
+      "timestamp": 12.412,
+      "foot": "right",
+      "datetime": "2025-09-12T13:53:27.004519"
+    },
+    {
+      "frame": 389,
+      "timestamp": 12.98,
+      "foot": "left",
+      "datetime": "2025-09-12T13:53:30.805689"
+    }
+  ],
+  "summary": {
+    "total_steps": 25,
+    "left_steps": 13,
+    "right_steps": 12,
+    "created": "2025-09-12T13:53:45.627704"
+  }
+}
