@@ -198,7 +198,9 @@ class SignalProcessor:
             # Design Butterworth filter
             nyquist_freq = sampling_rate / 2
             normalized_cutoff = self.config.cutoff_frequency * nyquist_freq
-            
+            #정규화된 차단주파수 = 0.1752
+            #의미: 나이퀴스트 주파수(15Hz)의 17.52%에 해당하는 비율
+
             # Create filter coefficients
             b, a = signal.butter(
                 self.config.filter_order,
@@ -380,9 +382,9 @@ if __name__ == "__main__":
     print(f"  Secondary: {processor.landmark_pairs['secondary']}")
     
     # Update configuration example
-    processor.config.cutoff_frequency = 0.2
-    print(f"\nUpdated cutoff frequency: {processor.config.cutoff_frequency}")
+    #processor.config.cutoff_frequency = 0.2
+    #print(f"\nUpdated cutoff frequency: {processor.config.cutoff_frequency}")
     
-    print("\nSignal processor ready!")
-    print("Input: Raw landmark coordinates from pose_extractor.py")
-    print("Output: Clean coordinate time series for gait_detector.py")
+    #print("\nSignal processor ready!")
+    #print("Input: Raw landmark coordinates from pose_extractor.py")
+    #print("Output: Clean coordinate time series for gait_detector.py")

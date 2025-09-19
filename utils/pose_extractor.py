@@ -97,8 +97,8 @@ class PoseExtractor:
         
         Returns:
             Dictionary containing:
-            - landmarks: List of landmark dictionaries for each processed frame
-            - timestamps: List of timestamps for each frame
+            - landmarks_data: List of landmark dictionaries for each processed frame (signal_processor compatible)
+            - timestamps: List of timestamps for each frame (signal_processor compatible)
             - video_info: Video metadata from VideoValidator
             - processing_stats: Processing statistics
         """
@@ -145,9 +145,6 @@ class PoseExtractor:
                     
                     if landmarks is not None:
                         frames_with_pose += 1
-                    
-                    if verbose and processed_count % 100 == 0:
-                        print(f"Processed {processed_count} frames...")
                 
                 frame_count += 1
         
@@ -173,11 +170,21 @@ class PoseExtractor:
             print(f"Actual processing FPS: {actual_fps:.2f}")
         
         return {
-            'landmarks': landmarks_list,
-            'timestamps': timestamps,
+            'landmarks_data': landmarks_list,  # ✅ signal_processor 호환 형태
+            'timestamps': timestamps,          # ✅ signal_processor 호환 형태
             'video_info': video_info,
             'processing_stats': processing_stats
         }
+    
+    def get_signal_processor_input(self, video_path: str, verbose: bool = True) -> Tuple[List[Dict], List[float]]:
+        """
+        Process video and return data in signal_processor.py compatible format
+        
+        Returns:
+            Tuple of (landmarks_data, timestamps) ready for signal_processor.process_coordinates()
+        """
+        result = self.process_video(video_path, verbose)
+        return result['landmarks_data'], result['timestamps']
     
     def get_landmark_quality_report(self, landmarks_data: List[Dict]) -> Dict[str, Dict]:
         """
@@ -224,14 +231,31 @@ if __name__ == "__main__":
     extractor = PoseExtractor(target_fps=10, confidence_threshold=0.7)
     
     # Process a video (replace with your video path)
-    video_path = "../data/test_videos/walk4.mp4"  # Adjusted for utils folder location
+    video_path = "./test_videos/walk4.mp4" 
     
     try:
-        # Extract pose data
+        # Method 1: Get full result (backward compatibility)
         result = extractor.process_video(video_path, verbose=True)
         
+        # Method 2: Get signal_processor compatible data directly
+        landmarks_data, timestamps = extractor.get_signal_processor_input(video_path, verbose=False)
+        
+        print(f"\n=== Signal Processor Compatible Output ===")
+        print(f"landmarks_data type: {type(landmarks_data)}")
+        print(f"timestamps type: {type(timestamps)}")
+        print(f"Total frames: {len(landmarks_data)}")
+        print(f"Time range: {timestamps[0]:.3f}s to {timestamps[-1]:.3f}s")
+        
+        # Show sample data structure
+        if landmarks_data[0] is not None:
+            print(f"\nSample frame data structure:")
+            for name, coords in landmarks_data[0].items():
+                x, y, conf = coords
+                status = "✓" if x is not None else "✗"
+                print(f"  {name}: {status} ({conf:.3f})")
+        
         # Generate quality report
-        quality_report = extractor.get_landmark_quality_report(result['landmarks'])
+        quality_report = extractor.get_landmark_quality_report(landmarks_data)
         
         print("\n=== Landmark Quality Report ===")
         for landmark_name, stats in quality_report.items():
@@ -240,18 +264,67 @@ if __name__ == "__main__":
             print(f"  Average confidence: {stats['average_confidence']:.3f}")
             print(f"  Valid frames: {stats['valid_frames']}/{stats['total_frames']}")
         
-        # Example: Access first frame with valid pose
-        for i, landmarks in enumerate(result['landmarks']):
-            if landmarks is not None:
-                timestamp = result['timestamps'][i]
-                print(f"\nFirst valid pose at {timestamp:.2f}s:")
-                for name, (x, y, conf) in landmarks.items():
-                    if x is not None:
-                        print(f"  {name}: ({x:.1f}, {y:.1f}) conf={conf:.3f}")
-                break
+        # Test with signal_processor (if available)
+        print(f"\n=== Testing with Signal Processor ===")
+        try:
+            from signal_processor import SignalProcessor, SignalProcessorConfig
+            
+            config = SignalProcessorConfig()
+            processor = SignalProcessor(config)
+            
+            # This should work now!
+            processed_result = processor.process_coordinates(landmarks_data, timestamps)
+            print(f"✅ Signal processor integration successful!")
+            print(f"   Sampling rate: {processed_result['metadata']['sampling_rate']:.2f} fps")
+            print(f"   Data coverage: {processed_result['metadata']['data_coverage']:.1%}")
+            
+        except ImportError:
+            print("⚠️ signal_processor.py not available, skipping integration test")
+        except Exception as e:
+            print(f"❌ Signal processor integration failed: {e}")
     
     except FileNotFoundError:
         print(f"Please provide a valid video file path")
+        print(f"Expected path: {video_path}")
+        
+        # Create sample data for testing without video
+        print(f"\n=== Creating Sample Data for Testing ===")
+        
+        # Generate mock landmarks data
+        sample_landmarks = []
+        sample_timestamps = []
+        
+        for i in range(100):  # 100 frames
+            timestamp = i * 0.033  # 30fps
+            
+            # Simulate walking pattern
+            landmarks = {
+                'LEFT_HIP': (320 + i*0.5, 240 + 5*np.sin(i*0.1), 0.9),
+                'RIGHT_HIP': (340 + i*0.5, 240 + 5*np.sin(i*0.1), 0.9),
+                'LEFT_HEEL': (315 + i*0.5, 380 + 10*np.sin(i*0.2), 0.8),
+                'RIGHT_HEEL': (345 + i*0.5, 380 + 10*np.sin(i*0.2 + np.pi), 0.8),
+                'LEFT_ANKLE': (316 + i*0.5, 360 + 8*np.sin(i*0.2), 0.85),
+                'RIGHT_ANKLE': (344 + i*0.5, 360 + 8*np.sin(i*0.2 + np.pi), 0.85),
+                'LEFT_FOOT_INDEX': (318 + i*0.5, 385 + 12*np.sin(i*0.2), 0.75),
+                'RIGHT_FOOT_INDEX': (342 + i*0.5, 385 + 12*np.sin(i*0.2 + np.pi), 0.75)
+            }
+            
+            # Simulate some missing data
+            if i % 15 == 0:  # Every 15th frame, lose some landmarks
+                landmarks['LEFT_HEEL'] = (None, None, 0.3)
+                landmarks['RIGHT_HEEL'] = (None, None, 0.3)
+            
+            sample_landmarks.append(landmarks)
+            sample_timestamps.append(timestamp)
+        
+        print(f"Generated {len(sample_landmarks)} sample frames")
+        
+        # Test quality report with sample data
+        quality_report = extractor.get_landmark_quality_report(sample_landmarks)
+        print(f"\nSample data quality:")
+        for name, stats in quality_report.items():
+            print(f"  {name}: {stats['detection_rate']:.1f}% detection rate")
+    
     except Exception as e:
         print(f"Error processing video: {e}")
     
